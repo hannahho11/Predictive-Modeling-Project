@@ -122,6 +122,7 @@ cat("Accuracy:", accuracy, "\n")
 ```
 
 ```{r}
+library(glmnet)
 testPredictions = predict(logModel, test)
 
 trainMatrix <- model.matrix(Attrition ~ ., data = train)
