@@ -122,6 +122,23 @@ cat("Accuracy:", accuracy, "\n")
 ```
 
 ```{r}
+#error types
+match <- data.frame(cbind(pred_results, reg_results = test$AttritionClass))
+
+match$error[(match$pred_results == 1 & match$reg_results ==1)] <- 'True positive'
+match$error[(match$pred_results == 0 & match$reg_results ==1)] <- 'False negative'
+match$error[(match$pred_results == 0 & match$reg_results ==0)] <- 'True negative'
+match$error[(match$pred_results == 1 & match$reg_results ==0)] <- 'False positive'
+
+errorType <- as.data.frame(addmargins(table(match$error)))
+
+print(errorType)
+
+cat("Probability that an employee predicted to stay leaves:", errorType[1, 2]/(errorType[1, 2] + errorType[3, 2]))
+cat("\nProbability that an employee predicted to leave stays:", errorType[2, 2]/(errorType[2, 2] + errorType[4, 2]))
+```
+
+```{r}
 #view individual regression for each variable
 for (i in seq_along(train)){
   print(names(train)[i])
@@ -146,15 +163,12 @@ for (i in seq_along(train)){
 ```{r}
 #LASSO to determine variables to include
 library(glmnet)
-testPredictions = predict(logModel, test)
-
 trainMatrix <- model.matrix(Attrition ~ ., data = train)
 testMatrix <- model.matrix(Attrition ~ ., data = test)
 grid <- 10 ^ seq(4, -2, length = 100)
 lasso <- glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
 lassoCV <- cv.glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
 lassoLambdaMin <- lassoCV$lambda.min
-#lassoTestPredictions <- predict(lasso, s = lassoLambdaMin, newx = testMatrix)
 predict(lasso, s = lassoLambdaMin, type = "coefficients")
 ```
 
@@ -183,6 +197,23 @@ accuracy2 <- (1-misClassError2)
 
 cat("Misclassification error:", misClassError2, "\n")
 cat("Accuracy:", accuracy2, "\n")
+```
+
+```{r}
+#error types for new logisitc regression
+match <- data.frame(cbind(pred_results2, reg_results = test$AttritionClass))
+
+match$error[(match$pred_results == 1 & match$reg_results ==1)] <- 'True positive'
+match$error[(match$pred_results == 0 & match$reg_results ==1)] <- 'False negative'
+match$error[(match$pred_results == 0 & match$reg_results ==0)] <- 'True negative'
+match$error[(match$pred_results == 1 & match$reg_results ==0)] <- 'False positive'
+
+errorType <- as.data.frame(addmargins(table(match$error)))
+
+print(errorType)
+
+cat("Probability that an employee predicted to stay leaves:", errorType[1, 2]/(errorType[1, 2] + errorType[3, 2]))
+cat("\nProbability that an employee predicted to leave stays:", errorType[2, 2]/(errorType[2, 2] + errorType[4, 2]))
 ```
 
 ```{r}
