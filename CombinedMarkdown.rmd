@@ -122,6 +122,29 @@ cat("Accuracy:", accuracy, "\n")
 ```
 
 ```{r}
+#view individual regression for each variable
+for (i in seq_along(train)){
+  print(names(train)[i])
+  loopLogModel <- glm(Attrition ~ get(names(train)[i]), family = binomial('logit'),data = train)
+  
+  pred_probabilitiesLoop <- predict(loopLogModel,test,type = 'response')
+  pred_resultsLoop <- ifelse(pred_probabilitiesLoop>0.5,1,0)
+
+  #Convert Attrition column in test to 0s and 1s to compare to pred_results
+  test$AttritionClass <- ifelse(test$Attrition == 'Yes',1,0)
+  
+  misClassErrorLoop <- mean(pred_resultsLoop != test$AttritionClass)
+  accuracyLoop <- (1-misClassErrorLoop)
+  
+  print(coef(summary(loopLogModel)))
+  cat("\nMisclassification error:", misClassErrorLoop, "\n")
+  cat("Accuracy:", accuracyLoop, "\n")
+  cat("\n\n")
+}
+```
+
+```{r}
+#LASSO to determine variables to include
 library(glmnet)
 testPredictions = predict(logModel, test)
 
@@ -138,6 +161,7 @@ predict(lasso, s = lassoLambdaMin, type = "coefficients")
 ```{r}
 plot(lasso, xvar = "dev")
 plot(lasso, xvar = "lambda")
+plot(lasso, xvar = "norm")
 ```
 
 ```{r}
@@ -160,9 +184,6 @@ accuracy2 <- (1-misClassError2)
 cat("Misclassification error:", misClassError2, "\n")
 cat("Accuracy:", accuracy2, "\n")
 ```
-
-
-
 
 ```{r}
 #Remove columns we dont need in our knn analysis
