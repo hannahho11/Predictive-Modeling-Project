@@ -5,6 +5,7 @@ finrf = randomForest(Attrition~.,data=train,ntree=500)
 finrfpred=predict(finrf,newdata=test)
 
 
-sum(abs(as.numeric(test$Attrition)-as.numeric(finrfpred)))/nrow(test)
+MissClassError = sum(abs(as.numeric(test$Attrition)-as.numeric(finrfpred)))/nrow(test)
 
 finrfrmse = sqrt(sum((as.numeric(test$Attrition)-as.numeric(finrfpred))^2)/nrow(test))
+varImpPlot(finrf)
