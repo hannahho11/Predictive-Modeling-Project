@@ -31,50 +31,11 @@ Master_Data <- merge(Master_Data,ms_data,by = 'EmployeeID',all = F)
 Master_Data <- merge(Master_Data,hours,by = 'EmployeeID',all = F)
 
 ##MISSING DATA
-#Missing Data Map
-missmap(Master_Data,y.at=c(1),y.labels = c(''),col=c('yellow','black'))
 #Omit NA data from dataframe since very little NA
 Master_Data <- na.omit(Master_Data)
-#Re-run missing data map
-missmap(Master_Data,y.at=c(1),y.labels = c(''),col=c('yellow','black'))
 #No more missing values
 ```
 
-```{r}
-##EXPLORATORY DATA ANALYSIS
-ggplot(Master_Data,aes(MonthlyIncome)) + 
-    geom_histogram(aes(fill=Attrition),color='black',binwidth=10000) + theme_bw()
-#Higher levels of attrition at lower income levels
-```
-
-```{r}
-ggplot(Master_Data,aes(WorkLifeBalance)) +
-  geom_bar(aes(fill = Attrition),color = 'black') +
-  theme_bw()
-#WorkLifeBalance: 1-Bad,2-Good,3-Better,4-Best
-#Those with 'better' work life balance seem to leave more - no pattern
-```
-
-```{r}
-ggplot(Master_Data,aes(DistanceFromHome)) + 
-  geom_histogram(aes(fill=Attrition),color='black',binwidth=2) + theme_bw()
-#People who live close to work seem to leave the company more often
-```
-
-```{r}
-ggplot(Master_Data,aes(JobRole)) +
-  geom_bar(aes(fill = Attrition),color = 'black') +
-  theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
-#There seems to be higher attrition among the Lab Technicians, Research Scientists, and Sales Execs
-#But theres also more of these 3 job roles - non-conclusive
-```
-
-```{r}
-ggplot(Master_Data,aes(JobLevel)) +
-  geom_bar(aes(fill = Attrition),color = 'black') +
-  theme_bw()
-#People at the lower job levels seem to leave more often
-```
 
 ```{r}
 ##CLEAN DATA
@@ -139,28 +100,6 @@ cat("\nProbability that an employee predicted to leave stays:", errorType[2, 2]/
 ```
 
 ```{r}
-#view individual regression for each variable
-for (i in seq_along(train)){
-  print(names(train)[i])
-  loopLogModel <- glm(Attrition ~ get(names(train)[i]), family = binomial('logit'),data = train)
-  
-  pred_probabilitiesLoop <- predict(loopLogModel,test,type = 'response')
-  pred_resultsLoop <- ifelse(pred_probabilitiesLoop>0.5,1,0)
-
-  #Convert Attrition column in test to 0s and 1s to compare to pred_results
-  test$AttritionClass <- ifelse(test$Attrition == 'Yes',1,0)
-  
-  misClassErrorLoop <- mean(pred_resultsLoop != test$AttritionClass)
-  accuracyLoop <- (1-misClassErrorLoop)
-  
-  print(coef(summary(loopLogModel)))
-  cat("\nMisclassification error:", misClassErrorLoop, "\n")
-  cat("Accuracy:", accuracyLoop, "\n")
-  cat("\n\n")
-}
-```
-
-```{r}
 #LASSO to determine variables to include
 library(glmnet)
 trainMatrix <- model.matrix(Attrition ~ ., data = train)
@@ -217,60 +156,16 @@ cat("\nProbability that an employee predicted to leave stays:", errorType[2, 2]/
 ```
 
 ```{r}
-#Remove columns we dont need in our knn analysis
-knnData <- Master_Data <- select(Master_Data,
-                      -BusinessTravel,-Department,-DistanceFromHome,
-                      -EducationField,-Gender,-JobRole,-MaritalStatus)
+library(randomForest)
+set.seed(1)
+
+finrf = randomForest(Attrition~.,data=train,ntree=500)
+finrfpred=predict(finrf,newdata=test)
+
+
+cat("Misclassification error:", sum(abs(as.numeric(test$Attrition)-as.numeric(finrfpred)))/nrow(test))
+
+finrfrmse = sqrt(sum((as.numeric(test$Attrition)-as.numeric(finrfpred))^2)/nrow(test))
+
+varImpPlot(finrf)
 ```
-
-```{r}
-#Target column
-attrition <- knnData[,2]
-#Scale data
-scaled_knnData <- scale(knnData[,-2])
-#Join scaled data with target column
-final_data <- cbind(scaled_knnData,attrition)
-```
-
-```{r}
-#Train/Test Split
-test_index <- 3001:4300
-test_data <- scaled_knnData[test_index,]
-test_attrition <- attrition[test_index]
-
-train_data <- scaled_knnData[-test_index,]
-train_attrition <- attrition[-test_index]
-
-#Building the KNN Model
-library(class)
-predicted_attrition <- knn(train_data,test_data,train_attrition,k=1)
-
-#Misclassification error
-misclass_error <- mean(test_attrition != predicted_attrition)
-cat("Misclassification error:", misclass_error, "\n")
-
-accuracy <- (1-misclass_error)
-cat("Accuracy:", accuracy, "\n")
-
-#######
-#Choosing a k value
-
-pred_attrition <- NULL
-error_rate <- NULL
-
-for (i in 1:50){
-  pred_attrition <- knn(train_data,test_data,train_attrition,k=i)
-  error_rate[i] <- mean(test_attrition != pred_attrition)
-  cat("Error rate for k =", i, ":", error_rate[i], "\n")
-}
-#print(error_rate)
-
-#Visualize K Elbow Method
-k_values <- 1:50
-error_df <- data.frame(error_rate,k_values)
-
-ggplot(error_df,aes(k_values,error_rate)) +
-  geom_point() + geom_line(lty = 'dotted',color = 'red')
-
-```
-
