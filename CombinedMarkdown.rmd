@@ -137,6 +137,13 @@ plot(lasso, xvar = "lambda")
 plot(lasso, xvar = "norm")
 ```
 
+```{r}
+compareLogLASSO <- data.frame(cbind(match$error, matchLASSO$error))
+names(compareLogLASSO) <- c('Logistic', 'Lasso')
+source("http://pcwww.liv.ac.uk/~william/R/crosstab.r")
+
+crosstab(compareLogLASSO, row.vars = "Logistic", col.vars = "Lasso", type = "f", addmargins=TRUE)
+```
 
 ```{r}
 library(randomForest)
