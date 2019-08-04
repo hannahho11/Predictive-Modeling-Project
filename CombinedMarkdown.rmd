@@ -71,12 +71,12 @@ cat("Accuracy:", accuracy, "\n")
 
 ```{r}
 #error types
-match <- data.frame(cbind(pred_results, reg_results = test$AttritionClass))
+match <- data.frame(cbind(pred_results, actual = test$AttritionClass))
 
-match$error[(match$pred_results == 1 & match$reg_results ==1)] <- 'True positive'
-match$error[(match$pred_results == 0 & match$reg_results ==1)] <- 'False negative'
-match$error[(match$pred_results == 0 & match$reg_results ==0)] <- 'True negative'
-match$error[(match$pred_results == 1 & match$reg_results ==0)] <- 'False positive'
+match$error[(match$pred_results == 1 & match$actual ==1)] <- 'True positive'
+match$error[(match$pred_results == 0 & match$actual ==1)] <- 'False negative'
+match$error[(match$pred_results == 0 & match$actual ==0)] <- 'True negative'
+match$error[(match$pred_results == 1 & match$actual ==0)] <- 'False positive'
 
 errorType <- as.data.frame(addmargins(table(match$error)))
 
@@ -89,9 +89,8 @@ cat("\nProbability that an employee predicted to leave stays:", errorType[2, 2]/
 ```{r}
 #LASSO to determine variables to include
 library(glmnet)
-test <- test[-29]
-trainMatrix <- model.matrix(Attrition ~ ., data = train)
-testMatrix <- model.matrix(Attrition ~ ., data = test)
+trainMatrix <- model.matrix(Attrition ~ ., data = train[-29])
+testMatrix <- model.matrix(Attrition ~ ., data = test[-29])
 grid <- 10 ^ seq(4, -2, length = 100)
 lasso <- glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
 lassoCV <- cv.glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
@@ -104,24 +103,24 @@ pred_probabilitiesLASSO <- predict(lasso, s = lassoLambdaMin, type = "response",
 pred_resultsLASSO <- ifelse(pred_probabilitiesLASSO>0.5,1,0)
 
 #Convert Attrition column in test to 0s and 1s to compare to pred_results
-test$AttritionClass <- ifelse(test$Attrition == 'Yes',1,0)
+#test$AttritionClass <- ifelse(test$Attrition == 'Yes',1,0)
 
 misClassErrorLASSO <- mean(pred_resultsLASSO != test$AttritionClass)
-accuracy <- (1-misClassErrorLASSO)
+accuracyLASSO <- (1-misClassErrorLASSO)
 
 cat("Misclassification error:", misClassErrorLASSO, "\n")
-cat("Accuracy:", accuracy, "\n")
+cat("Accuracy:", accuracyLASSO, "\n")
 ```
 
 ```{r}
 #error types
-matchLASSO <- data.frame(cbind(pred_resultsLASSO, LASSOresults = test$AttritionClass))
-names(matchLASSO) <- c("pred_resultsLASSO", "LASSOresults")
+matchLASSO <- data.frame(cbind(pred_resultsLASSO, actual = test$AttritionClass))
+names(matchLASSO) <- c("pred_resultsLASSO", "actual")
 
-matchLASSO$error[(matchLASSO$pred_resultsLASSO == 1 & matchLASSO$LASSOresults ==1)] <- 'True positive'
-matchLASSO$error[(matchLASSO$pred_resultsLASSO == 0 & matchLASSO$LASSOresults ==1)] <- 'False negative'
-matchLASSO$error[(matchLASSO$pred_resultsLASSO == 0 & matchLASSO$LASSOresults ==0)] <- 'True negative'
-matchLASSO$error[(matchLASSO$pred_resultsLASSO == 1 & matchLASSO$LASSOresults ==0)] <- 'False positive'
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 1 & matchLASSO$actual ==1)] <- 'True positive'
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 0 & matchLASSO$actual ==1)] <- 'False negative'
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 0 & matchLASSO$actual ==0)] <- 'True negative'
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 1 & matchLASSO$actual ==0)] <- 'False positive'
 
 errorTypeLASSO <- as.data.frame(addmargins(table(matchLASSO$error)))
 
