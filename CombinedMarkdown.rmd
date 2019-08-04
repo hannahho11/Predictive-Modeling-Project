@@ -89,6 +89,7 @@ cat("\nProbability that an employee predicted to leave stays:", errorType[2, 2]/
 ```{r}
 #LASSO to determine variables to include
 library(glmnet)
+test <- test[-29]
 trainMatrix <- model.matrix(Attrition ~ ., data = train)
 testMatrix <- model.matrix(Attrition ~ ., data = test)
 grid <- 10 ^ seq(4, -2, length = 100)
@@ -99,48 +100,44 @@ predict(lasso, s = lassoLambdaMin, type = "coefficients")
 ```
 
 ```{r}
+pred_probabilitiesLASSO <- predict(lasso, s = lassoLambdaMin, type = "response", newx = testMatrix)
+pred_resultsLASSO <- ifelse(pred_probabilitiesLASSO>0.5,1,0)
+
+#Convert Attrition column in test to 0s and 1s to compare to pred_results
+test$AttritionClass <- ifelse(test$Attrition == 'Yes',1,0)
+
+misClassErrorLASSO <- mean(pred_resultsLASSO != test$AttritionClass)
+accuracy <- (1-misClassErrorLASSO)
+
+cat("Misclassification error:", misClassErrorLASSO, "\n")
+cat("Accuracy:", accuracy, "\n")
+```
+
+```{r}
+#error types
+matchLASSO <- data.frame(cbind(pred_resultsLASSO, LASSOresults = test$AttritionClass))
+names(matchLASSO) <- c("pred_resultsLASSO", "LASSOresults")
+
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 1 & matchLASSO$LASSOresults ==1)] <- 'True positive'
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 0 & matchLASSO$LASSOresults ==1)] <- 'False negative'
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 0 & matchLASSO$LASSOresults ==0)] <- 'True negative'
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 1 & matchLASSO$LASSOresults ==0)] <- 'False positive'
+
+errorTypeLASSO <- as.data.frame(addmargins(table(matchLASSO$error)))
+
+print(errorTypeLASSO)
+
+cat("Probability that an employee predicted to stay leaves:", errorTypeLASSO[1, 2]/(errorTypeLASSO[1, 2] + errorTypeLASSO[3, 2]))
+cat("\nProbability that an employee predicted to leave stays:", errorTypeLASSO[2, 2]/(errorTypeLASSO[2, 2] + errorTypeLASSO[4, 2]))
+```
+
+
+```{r}
 plot(lasso, xvar = "dev")
 plot(lasso, xvar = "lambda")
 plot(lasso, xvar = "norm")
 ```
 
-```{r}
-#new Logistic model
-logModel2 <- glm(Attrition ~ Age + BusinessTravel + JobRole + MaritalStatus + NumCompaniesWorked + StockOptionLevel + TotalWorkingYears + TrainingTimesLastYear + YearsSinceLastPromotion + YearsWithCurrManager + EnvironmentSatisfaction + JobSatisfaction + WorkLifeBalance + Avg_Daily_Hours, family = binomial('logit'),data = train)
-
-summary(logModel2)
-```
-
-```{r}
-pred_probabilities2 <- predict(logModel2,test,type = 'response')
-pred_results2 <- ifelse(pred_probabilities2>0.5,1,0)
-
-#Convert Attrition column in test to 0s and 1s to compare to pred_results
-test$AttritionClass <- ifelse(test$Attrition == 'Yes',1,0)
-
-misClassError2 <- mean(pred_results2 != test$AttritionClass)
-accuracy2 <- (1-misClassError2)
-
-cat("Misclassification error:", misClassError2, "\n")
-cat("Accuracy:", accuracy2, "\n")
-```
-
-```{r}
-#error types for new logisitc regression
-match2 <- data.frame(cbind(pred_results2, reg_results = test$AttritionClass))
-
-match2$error[(match2$pred_results == 1 & match2$reg_results ==1)] <- 'True positive'
-match2$error[(match2$pred_results == 0 & match2$reg_results ==1)] <- 'False negative'
-match2$error[(match2$pred_results == 0 & match2$reg_results ==0)] <- 'True negative'
-match2$error[(match2$pred_results == 1 & match2$reg_results ==0)] <- 'False positive'
-
-errorType <- as.data.frame(addmargins(table(match2$error)))
-
-print(errorType)
-
-cat("Probability that an employee predicted to stay leaves:", errorType[1, 2]/(errorType[1, 2] + errorType[3, 2]))
-cat("\nProbability that an employee predicted to leave stays:", errorType[2, 2]/(errorType[2, 2] + errorType[4, 2]))
-```
 
 ```{r}
 library(randomForest)
