@@ -147,6 +147,18 @@ crosstab(compareLogLASSO, row.vars = "Logistic", col.vars = "Lasso", type = "f",
 
 ```{r}
 library(randomForest)
+
+set.seed(1)
+#Drop the variables whose coefficients = 0 in LASSO
+#Produces a simpler model without compromising accuracy.
+Master_Data <- Master_Data[,-c(4,5,6,7,8,9,12,14,15,18,24,25,27,28)]
+sample <- sample.split(Master_Data$Attrition,SplitRatio = 0.7)
+
+#Training Data
+train <- subset(Master_Data,sample==T)
+#Testing Data
+test <- subset(Master_Data,sample==F)
+
 set.seed(1)
 finrf = randomForest(Attrition~.,data=train,ntree=500)
 finrfpred=predict(finrf,newdata=test)
@@ -163,6 +175,10 @@ varImpPlot(finrf)
 #error types for random forest
 forestMatch <- data.frame(cbind(test$Attrition, finrfpred))
 names(forestMatch) <- c('actual', 'prediction')
+
+source("http://pcwww.liv.ac.uk/~william/R/crosstab.r")
+
+crosstab(forestMatch, row.vars = "actual", col.vars = "prediction", type = "f", addmargins=TRUE)
 
 forestMatch$error[(forestMatch$prediction == 2 & forestMatch$actual ==2)] <- 'True positive'
 forestMatch$error[(forestMatch$prediction == 1 & forestMatch$actual ==2)] <- 'False negative'
