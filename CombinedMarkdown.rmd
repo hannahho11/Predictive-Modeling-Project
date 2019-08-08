@@ -89,8 +89,56 @@ cat("\nProbability that an employee predicted to leave stays:", errorType[2, 2]/
 ```{r}
 #LASSO to determine variables to include
 library(glmnet)
-trainMatrix <- model.matrix(Attrition ~ ., data = train[-29])
-testMatrix <- model.matrix(Attrition ~ ., data = test[-29])
+trainMatrix <- model.matrix(Attrition ~ ., data = train)
+testMatrix <- model.matrix(Attrition ~ ., data = test)
+grid <- 10 ^ seq(4, -2, length = 100)
+lasso <- glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
+lassoCV <- cv.glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
+lassoLambdaMin <- lassoCV$lambda.min
+predict(lasso, s = lassoLambdaMin, type = "coefficients")
+```
+
+```{r}
+#LASSO Loop All possible two column combinations
+trainSwap <- train[, c(2,1,3:ncol(train))]
+testSwap <- test[, c(2,1,3:ncol(test))]
+
+coefficientFrame <- data.frame(X1= numeric(0))
+
+for (n in 2:(ncol(trainSwap)-1)){
+  for (i in (n+1):ncol(trainSwap)){
+    trainCut = trainSwap[, c(1,n,i)]
+    testCut  = testSwap[, c(1,n,i)]
+    
+    trainMatrix <- model.matrix(Attrition ~ ., data = trainCut)
+    testMatrix <- model.matrix(Attrition ~ ., data = testCut)
+    grid <- 10 ^ seq(4, -2, length = 100)
+    lasso <- glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
+    lassoCV <- cv.glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
+    lassoLambdaMin <- lassoCV$lambda.min
+    
+    x = predict(lasso, s = lassoLambdaMin, type = "coefficients")
+    
+    matFrame <- data.frame(as.matrix(x))
+    matFrame <- cbind('variable' = rownames(matFrame), matFrame)
+    rownames(matFrame) <- 1:nrow(matFrame)
+  
+    i <- sapply(matFrame, is.factor)
+    matFrame[i] <- lapply(matFrame[i], as.character)
+    
+    coefficientFrame <- rbind(coefficientFrame, matFrame)
+  }
+}
+
+
+```
+
+```{r}
+trainCut = trainSwap[, c(1,n,i)]
+testCut  = testSwap[, c(1,n,i)]
+    
+trainMatrix <- model.matrix(Attrition ~ ., data = trainCut)
+testMatrix <- model.matrix(Attrition ~ ., data = testCut)
 grid <- 10 ^ seq(4, -2, length = 100)
 lasso <- glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
 lassoCV <- cv.glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
