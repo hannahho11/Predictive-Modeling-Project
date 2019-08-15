@@ -1,0 +1,242 @@
+---
+title: "CombinedMarkdown"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}    
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(Amelia)
+```
+
+```{r}
+#read in merged data, created by conmbining several spreadsheets
+Master_Data <- read.csv("master.csv")
+```
+
+```{r}
+##CLEAN DATA
+
+#Omit NA data from dataframe since very little NA
+Master_Data <- na.omit(Master_Data)
+
+#Remove columns we dont need in our analysis
+Master_Data$StandardHours <- NULL
+Master_Data$Over18 <- NULL
+Master_Data$EmployeeCount <- NULL
+Master_Data$EmployeeID <- NULL
+```
+
+```{r}
+##SPLIT DATA
+library(caTools)
+set.seed(1)
+sample <- sample.split(Master_Data$Attrition,SplitRatio = 0.7)
+
+#Training Data
+train <- subset(Master_Data,sample==T)
+#Testing Data
+test <- subset(Master_Data,sample==F)
+```
+
+```{r}
+##TRAIN THE LOGISTIC REGRESSION MODEL
+logModel <- glm(Attrition ~., family = binomial('logit'),data = train)
+summary(logModel)
+```
+
+```{r}
+##PREDICTIONS
+pred_probabilities <- predict(logModel,test,type = 'response')
+pred_results <- ifelse(pred_probabilities>0.5,1,0)
+
+#Convert Attrition column in test to 0s and 1s to compare to pred_results
+test$AttritionClass <- ifelse(test$Attrition == 'Yes',1,0)
+
+misClassError <- mean(pred_results != test$AttritionClass)
+accuracy <- (1-misClassError)
+
+cat("Misclassification error:", misClassError, "\n")
+cat("Accuracy:", accuracy, "\n")
+```
+
+```{r}
+#error types
+match <- data.frame(cbind(pred_results, actual = test$AttritionClass))
+
+match$error[(match$pred_results == 1 & match$actual ==1)] <- 'True positive'
+match$error[(match$pred_results == 0 & match$actual ==1)] <- 'False negative'
+match$error[(match$pred_results == 0 & match$actual ==0)] <- 'True negative'
+match$error[(match$pred_results == 1 & match$actual ==0)] <- 'False positive'
+
+errorType <- as.data.frame(addmargins(table(match$error)))
+
+print(errorType)
+
+cat("Probability that an employee predicted to stay leaves:", errorType[1, 2]/(errorType[1, 2] + errorType[3, 2]))
+cat("\nProbability that an employee predicted to leave stays:", errorType[2, 2]/(errorType[2, 2] + errorType[4, 2]))
+```
+
+```{r}
+#LASSO to determine variables to include
+library(glmnet)
+trainMatrix <- model.matrix(Attrition ~ ., data = train)
+testMatrix <- model.matrix(Attrition ~ ., data = test)
+grid <- 10 ^ seq(4, -2, length = 100)
+lasso <- glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
+lassoCV <- cv.glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
+lassoLambdaMin <- lassoCV$lambda.min
+predict(lasso, s = lassoLambdaMin, type = "coefficients")
+```
+
+```{r}
+#LASSO Loop All possible two column combinations
+trainSwap <- train[, c(2,1,3:ncol(train))]
+testSwap <- test[, c(2,1,3:ncol(test))]
+
+coefficientFrame <- data.frame(X1= numeric(0))
+
+for (n in 2:(ncol(trainSwap)-1)){
+  for (i in (n+1):ncol(trainSwap)){
+    trainCut = trainSwap[, c(1,n,i)]
+    testCut  = testSwap[, c(1,n,i)]
+    
+    trainMatrix <- model.matrix(Attrition ~ ., data = trainCut)
+    testMatrix <- model.matrix(Attrition ~ ., data = testCut)
+    grid <- 10 ^ seq(4, -2, length = 100)
+    lasso <- glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
+    lassoCV <- cv.glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
+    lassoLambdaMin <- lassoCV$lambda.min
+    
+    x = predict(lasso, s = lassoLambdaMin, type = "coefficients")
+    
+    matFrame <- data.frame(as.matrix(x))
+    matFrame <- cbind('variable' = rownames(matFrame), matFrame)
+    rownames(matFrame) <- 1:nrow(matFrame)
+  
+    i <- sapply(matFrame, is.factor)
+    matFrame[i] <- lapply(matFrame[i], as.character)
+    
+    coefficientFrame <- rbind(coefficientFrame, matFrame)
+  }
+}
+
+
+```
+
+```{r}
+trainCut = trainSwap[, c(1,n,i)]
+testCut  = testSwap[, c(1,n,i)]
+    
+trainMatrix <- model.matrix(Attrition ~ ., data = trainCut)
+testMatrix <- model.matrix(Attrition ~ ., data = testCut)
+grid <- 10 ^ seq(4, -2, length = 100)
+lasso <- glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
+lassoCV <- cv.glmnet(trainMatrix, train$Attrition, alpha = 1, lambda = grid, thresh = 1e-12, family = "binomial")
+lassoLambdaMin <- lassoCV$lambda.min
+predict(lasso, s = lassoLambdaMin, type = "coefficients")
+```
+
+```{r}
+pred_probabilitiesLASSO <- predict(lasso, s = lassoLambdaMin, type = "response", newx = testMatrix)
+pred_resultsLASSO <- ifelse(pred_probabilitiesLASSO>0.5,1,0)
+
+#Convert Attrition column in test to 0s and 1s to compare to pred_results
+#test$AttritionClass <- ifelse(test$Attrition == 'Yes',1,0)
+
+misClassErrorLASSO <- mean(pred_resultsLASSO != test$AttritionClass)
+accuracyLASSO <- (1-misClassErrorLASSO)
+
+cat("Misclassification error:", misClassErrorLASSO, "\n")
+cat("Accuracy:", accuracyLASSO, "\n")
+```
+
+```{r}
+#error types
+matchLASSO <- data.frame(cbind(pred_resultsLASSO, actual = test$AttritionClass))
+names(matchLASSO) <- c("pred_resultsLASSO", "actual")
+
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 1 & matchLASSO$actual ==1)] <- 'True positive'
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 0 & matchLASSO$actual ==1)] <- 'False negative'
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 0 & matchLASSO$actual ==0)] <- 'True negative'
+matchLASSO$error[(matchLASSO$pred_resultsLASSO == 1 & matchLASSO$actual ==0)] <- 'False positive'
+
+errorTypeLASSO <- as.data.frame(addmargins(table(matchLASSO$error)))
+
+print(errorTypeLASSO)
+
+cat("Probability that an employee predicted to stay leaves:", errorTypeLASSO[1, 2]/(errorTypeLASSO[1, 2] + errorTypeLASSO[3, 2]))
+cat("\nProbability that an employee predicted to leave stays:", errorTypeLASSO[2, 2]/(errorTypeLASSO[2, 2] + errorTypeLASSO[4, 2]))
+```
+
+
+```{r}
+plot(lasso, xvar = "dev")
+plot(lasso, xvar = "lambda")
+plot(lasso, xvar = "norm")
+```
+
+```{r}
+compareLogLASSO <- data.frame(cbind(match$error, matchLASSO$error))
+names(compareLogLASSO) <- c('Logistic', 'Lasso')
+source("http://pcwww.liv.ac.uk/~william/R/crosstab.r")
+
+crosstab(compareLogLASSO, row.vars = "Logistic", col.vars = "Lasso", type = "f", addmargins=TRUE)
+```
+
+```{r}
+library(randomForest)
+
+set.seed(1)
+#Drop the variables whose coefficients = 0 in LASSO
+#Produces a simpler model without compromising accuracy.
+Master_Data <- Master_Data[,-c(4,5,6,7,8,9,12,14,15,18,24,25,27,28)]
+sample <- sample.split(Master_Data$Attrition,SplitRatio = 0.7)
+
+#Training Data
+train <- subset(Master_Data,sample==T)
+#Testing Data
+test <- subset(Master_Data,sample==F)
+
+set.seed(1)
+finrf = randomForest(Attrition~.,data=train,ntree=500)
+finrfpred=predict(finrf,newdata=test)
+
+
+cat("Misclassification error:", sum(abs(as.numeric(test$Attrition)-as.numeric(finrfpred)))/nrow(test))
+
+finrfrmse = sqrt(sum((as.numeric(test$Attrition)-as.numeric(finrfpred))^2)/nrow(test))
+
+varImpPlot(finrf)
+```
+
+```{r}
+#error types for random forest
+forestMatch <- data.frame(cbind(test$Attrition, finrfpred))
+names(forestMatch) <- c('actual', 'prediction')
+
+source("http://pcwww.liv.ac.uk/~william/R/crosstab.r")
+
+crosstab(forestMatch, row.vars = "actual", col.vars = "prediction", type = "f", addmargins=TRUE)
+
+forestMatch$error[(forestMatch$prediction == 2 & forestMatch$actual ==2)] <- 'True positive'
+forestMatch$error[(forestMatch$prediction == 1 & forestMatch$actual ==2)] <- 'False negative'
+forestMatch$error[(forestMatch$prediction == 1 & forestMatch$actual ==1)] <- 'True negative'
+forestMatch$error[(forestMatch$prediction == 2 & forestMatch$actual ==1)] <- 'False positive'
+
+errorType <- as.data.frame(addmargins(table(forestMatch$error)))
+
+print(errorType)
+
+cat("Probability that an employee predicted to stay leaves:", errorType[1, 2]/(errorType[1, 2] + errorType[3, 2]))
+cat("\nProbability that an employee predicted to leave stays:", errorType[2, 2]/(errorType[2, 2] + errorType[4, 2]))
+```
